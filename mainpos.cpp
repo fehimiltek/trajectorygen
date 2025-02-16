@@ -1,5 +1,6 @@
-
 #include "motion.h"
+
+std::vector<double> positionData;
 
 float newtonCbrt(float x, int iterations = 10)
 {
@@ -179,32 +180,6 @@ void *MC_MoveAbsolute::mc_move_absolute_exec()
     }
 
 
-    // if (stage == 1 && (currentAcceleration >= MaxAcceleration))
-    // {
-    //     stage = 2;
-    // }
-    // if (stage == 2 && (currentVelocity >= DesiredVelocity))
-    // {
-    //     stage = 3;
-    // }
-    // if (stage == 3 && (currentAcceleration <= 0))
-    // {
-    //     stage = 4;
-    // }
-    // if (stage == 5 && (abs(currentAcceleration) >= MaxDeceleration))
-    // {
-    //     stage = 6;
-    // }
-    // if (stage == 6 && (desiredPosition - currentPosition) < (bufferT3distance))
-    // {
-    //     stage = 7;
-    // }
-    // if (stage == 7 && (desiredPosition - currentPosition) < 0)
-    // {
-    //     stage = 8;
-    // }
- 
-
     targetPosition = tempPosition + (currentPosition * direction);
 
     positionData.push_back(targetPosition);
@@ -228,14 +203,7 @@ void MC_MoveAbsolute::mc_move_absolute(short unsigned int axis, bool Execute, bo
         }
         if (Execute && !Execute_previous)
         {
-
-            if (first_scan)
-            {
-                m_Task = Task::Periodic();
-                m_Task.SetPeriod(350);
-                m_Task.Bind(std::bind(&MC_MoveAbsolute::mc_move_absolute_exec, this));
-                first_scan = false;
-            }
+            
             Busy = true;
             Done = false;
             tempPosition = 0;
@@ -263,7 +231,7 @@ void MC_MoveAbsolute::mc_move_absolute(short unsigned int axis, bool Execute, bo
             previousTime = 0.0;
             positionData.clear(); // ✅ Clear previous data
             begin = std::chrono::system_clock::now();
-            m_Task.Start();
+            periodicRunner.start(std::bind(&MC_MoveAbsolute::mc_move_absolute_exec, this), std::chrono::microseconds(350));
         }
 
 
@@ -276,24 +244,83 @@ void MC_MoveAbsolute::mc_move_absolute(short unsigned int axis, bool Execute, bo
 
         if (!Busy)
         {
-            m_Task.Stop();
+            periodicRunner.stop();
         }
     }
     Execute_previous = Execute;
     EN = ENO;
 }
 
-// int main()
-// {
-//     MC_MoveAbsolute mc_move_absolute;
-//     truncatepos();
-//     truncatevel();
-//     truncateacc();
-//     while (!mc_move_absolute.Done)
-//     {
-// //         std::cout << "mc_move_absolute done " <<  mc_move_absolute.Done << " counter: " << counter << std::endl;
-//         mc_move_absolute.mc_move_absolute(0, true, false, 10, 100.0, 500.0, 500.0, 10000.0, 0, 0, true);
-//         std::this_thread::sleep_for(std::chrono::milliseconds(1));
-//     }
-//     return 0;
-// }
+void plotPositionData()
+{
+    if (!glfwInit())
+    {
+        std::cerr << "Failed to initialize GLFW\n";
+        return;
+    }
+
+    GLFWwindow *window = glfwCreateWindow(800, 600, "Position Data Plot", NULL, NULL);
+    if (!window)
+    {
+        std::cerr << "Failed to create GLFW window\n";
+        glfwTerminate();
+        return;
+    }
+    glfwMakeContextCurrent(window);
+
+    glViewport(0, 0, 800, 600);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0, positionData.size(), -1.2, 1.2, -1.0, 1.0); // 2D projection
+
+    // Normalize position data
+    float minVal = *std::min_element(positionData.begin(), positionData.end());
+    float maxVal = *std::max_element(positionData.begin(), positionData.end());
+
+    std::vector<float> normalizedData;
+    for (float pos : positionData)
+    {
+        float normalized = 2 * ((pos - minVal) / (maxVal - minVal)) - 1; // Normalize to [-1,1]
+        normalizedData.push_back(normalized);
+    }
+
+    while (!glfwWindowShouldClose(window))
+    {
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glColor3f(1.0f, 1.0f, 1.0f); // White color for graph
+        glBegin(GL_LINE_STRIP);
+        for (size_t i = 0; i < normalizedData.size(); ++i)
+        {
+            glVertex2f(i, normalizedData[i]); // Plot points
+        }
+        glEnd();
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+}
+
+int main()
+{
+    MC_MoveAbsolute motionController;
+
+    motionController.Busy = true;
+    std::cout << "Enter Target Position (or -1 to exit): ";
+    double targetPosition;
+    std::cin >> targetPosition;
+    while (motionController.Busy)
+    {
+        if (targetPosition == -1)
+            break;
+        motionController.mc_move_absolute(0, true, false, targetPosition, 100.0, 1000.0, 1000.0, 20000.0, 0, 0, true);
+        std::cout << "Moving to " << targetPosition << "...\n";
+    }
+
+    plotPositionData();
+
+    return 0;
+}
