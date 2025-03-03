@@ -1,190 +1,186 @@
 #include "motion.h"
-
-std::vector<double> positionData;
-
-float newtonCbrt(float x, int iterations = 10)
+bool solveQuadratic(float a, float b, float c, float &x1, float &x2)
 {
-    float guess = x; // Initial guess
-    for (int i = 0; i < iterations; i++)
+    float discriminant = b * b - 4 * a * c;
+
+    if (discriminant < 0)
     {
-        guess = (2.0 * guess + x / (guess * guess)) / 3.0;
+        return false;
     }
-    return guess;
+
+    float sqrt_discriminant = std::sqrt(discriminant);
+    float denom = 2 * a;
+
+    x1 = (-b + sqrt_discriminant) / denom;
+    x2 = (-b - sqrt_discriminant) / denom;
+
+    return true;
 }
 
 unsigned int counter = 0;
+
 void *MC_MoveAbsolute::mc_move_absolute_exec()
-{    
-    
+{
+
     accelerationTime = static_cast<float>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - begin).count()) * 0.000001f;
     deltaTime = accelerationTime - previousTime;
 
-
-    if (stage == 10 && (currentAcceleration >= MaxAcceleration * 1.003))
+    if (stage == 10 && (accelerationTime > t1))
     {
         stage = 20;
-        currentAcceleration = MaxAcceleration;
     }
-    else if (stage == 20 && ((DesiredVelocity - currentVelocity) <= ((currentAcceleration * t3) - (0.5 * JerkLimit * std::pow(t3, 2)) * 1.003)))
+    else if (stage == 20 && (accelerationTime > (t1 + t2)))
     {
         stage = 30;
     }
-    else if (stage == 30 && (currentAcceleration <= 0.003))
+    else if (stage == 30 && (accelerationTime > (t1 + t2 + t3)))
     {
         stage = 40;
         currentAcceleration = 0;
-        currentVelocity = DesiredVelocity;
-
     }
-    else if (stage == 50 && (abs(currentAcceleration) * 1.003 > MaxDeceleration))
+    else if (stage == 50 && (accelerationTime > t1))
     {
         stage = 60;
     }
-    else if (stage == 60 && ((currentVelocity * 1.003) < (-(currentAcceleration * t3) - (0.5 * JerkLimit * std::pow(t3, 2)))
-    || (remainedDistance < (std::pow(currentAcceleration, 3) / (6 * std::pow(JerkLimit, 2))))))
+
+    else if (stage == 60 && (accelerationTime > (t1 + t2)))
     {
         stage = 70;
     }
-    else if (stage == 70 && (currentVelocity <= 0))
+    else if (stage == 70 && ((accelerationTime > (t1 + t2 + t3)) || (currentVelocity <= 0)))
     {
-        std::cout << "velocity under zero" << std::endl;
         stage = 80;
     }
-
 
     switch (stage)
     {
     case 10:
-        {
-            deltaAcceleration = JerkLimit * deltaTime;
-            currentAcceleration += deltaAcceleration;
-            deltaVelocity =  currentAcceleration * deltaTime;
-            currentVelocity += deltaVelocity;
-            currentPosition += currentVelocity * deltaTime;
-            bufferDistance = currentPosition ;
-            counter++;
-            std::cout << "t1 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
-        }
-        break;
-    
+    {
+        deltaAcceleration = JerkLimit * deltaTime;
+        currentAcceleration += deltaAcceleration;
+        deltaVelocity = currentAcceleration * deltaTime;
+        currentVelocity += deltaVelocity;
+        currentPosition += currentVelocity * deltaTime;
+        bufferDistance = currentPosition;
+        counter++;
+        // std::cout << "t1 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
+    }
+    break;
+
     case 20:
-        {
-            deltaVelocity = currentAcceleration * deltaTime;
-            currentVelocity += deltaVelocity;
-            currentPosition += currentVelocity * deltaTime;
-            bufferDistance = currentPosition;
-            counter++;
-            std::cout << "t2 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
-        }
-        break;
-    
+    {
+        deltaVelocity = currentAcceleration * deltaTime;
+        currentVelocity += deltaVelocity;
+        currentPosition += currentVelocity * deltaTime;
+        bufferDistance = currentPosition;
+        counter++;
+        // std::cout << "t2 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
+    }
+    break;
+
     case 30:
-        {
-            deltaAcceleration = JerkLimit * deltaTime;
-            currentAcceleration -= deltaAcceleration;
-            deltaVelocity = currentAcceleration * deltaTime;
-            currentVelocity += deltaVelocity;
-            currentPosition += currentVelocity * deltaTime;
-            bufferDistance = currentPosition;
-            counter++;
-            std::cout << "t3 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
-        }
-        break;
-    
+    {
+        deltaAcceleration = JerkLimit * deltaTime;
+        currentAcceleration -= deltaAcceleration;
+        deltaVelocity = currentAcceleration * deltaTime;
+        currentVelocity += deltaVelocity;
+        currentPosition += currentVelocity * deltaTime;
+        bufferDistance = currentPosition;
+        counter++;
+        // std::cout << "t3 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
+    }
+    break;
+
     case 40:
-        {
-            currentPosition += currentVelocity * deltaTime;
-            counter++;
-            // std::cout << "t4 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
-        }
-        break;
+    {
+        currentPosition += currentVelocity * deltaTime;
+        counter++;
+        // std::cout << "t4 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
+    }
+    break;
 
     case 49:
-        {
-            currentPosition += currentVelocity * deltaTime;
-            counter++;
-            stage = 50;
-        }
-        break;
+    {
+        currentPosition += currentVelocity * deltaTime;
+        counter++;
+        stage = 50;
+    }
+    break;
     case 50:
-        {
-            deltaDeceleration = JerkLimit * deltaTime;
-            currentAcceleration -= deltaDeceleration;
-            deltaVelocity = currentAcceleration * deltaTime;
-            currentVelocity += deltaVelocity;
-            currentPosition += currentVelocity * deltaTime;
-            counter++;
-            std::cout << "t5 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
-        }
-        break;
+    {
+        deltaDeceleration = JerkLimit * deltaTime;
+        currentAcceleration -= deltaDeceleration;
+        deltaVelocity = currentAcceleration * deltaTime;
+        currentVelocity += deltaVelocity;
+        currentPosition += currentVelocity * deltaTime;
+        counter++;
+        // std::cout << "t5 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
+    }
+    break;
 
     case 60:
-        {
-            deltaVelocity = currentAcceleration * deltaTime;
-            currentVelocity += deltaVelocity;
-            currentPosition += currentVelocity * deltaTime;
-            counter++;
-            std::cout << "t6 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
-        }
-        break;
+    {
+        deltaVelocity = currentAcceleration * deltaTime;
+        currentVelocity += deltaVelocity;
+        currentPosition += currentVelocity * deltaTime;
+        counter++;
+        // std::cout << "t6 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
+    }
+    break;
 
     case 70:
-        {
-            deltaDeceleration = JerkLimit * deltaTime;
-            // (remainedDistance) > (-std::pow(currentAcceleration, 3) / (6 * std::pow(JerkLimit, 2)))
-            // ? currentAcceleration = currentAcceleration : currentAcceleration += deltaDeceleration; 
-            currentAcceleration += deltaDeceleration;
-            std::cout << "remainedDistance " << remainedDistance << std::endl;
-            std::cout << "compared " << -std::pow(currentAcceleration, 3) / (6 * std::pow(JerkLimit, 2)) << std::endl;
-            deltaVelocity = currentAcceleration * deltaTime;
-            currentVelocity += deltaVelocity;
-            currentPosition += currentVelocity * deltaTime;
-            counter++;
-            std::cout << "t7 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
-        }
-        break;
+    {
+        deltaDeceleration = JerkLimit * deltaTime;
+        currentAcceleration += deltaDeceleration;
+        deltaVelocity = currentAcceleration * deltaTime;
+        currentVelocity += deltaVelocity;
+        currentPosition += currentVelocity * deltaTime;
+        counter++;
+        // std::cout << "t7 : " << "currentPosition " << currentPosition << " currentVelocity " << currentVelocity << " currentAcceleration " << currentAcceleration << " counter: " << counter << std::endl;
+    }
+    break;
 
     case 80:
-        {
-            Done = true;
-            Busy = false;
-        }
-        break;
+    {
+        Done = true;
+        Busy = false;
+    }
+    break;
 
+    case 90:
+    {
+        Error = true;
+        ErrorID = 5; // ErrorID 5: Negative Velocity target not reached
+        Busy = false;
+    }
+    break;
     }
 
-    remainedDistance = desiredPosition - currentPosition;
-    previousTime = accelerationTime;
-    if (remainedDistance <= 0.003)
+    if (desiredPosition - currentPosition <= 0.001)
     {
         stage = 80;
-        currentPosition = desiredPosition;
     }
-
-    if (remainedDistance <= bufferDistance)
+    if (currentVelocity < 0.0)
     {
-        if (stage == 40)
-        {
-            stage = 50;
-            counter = 0;
-            previousTime = 0.0;
-            begin = std::chrono::system_clock::now();
-        }
-        else if (stage == 10)
-        {
-            stage = 70;
-            counter = 0;
-            previousTime = 0.0;
-            begin = std::chrono::system_clock::now();
-        }
+        stage = 90;
     }
 
-
+    else if ((stage == 40) && (desiredPosition - currentPosition <= bufferDistance))
+    {
+        stage = 49;
+        counter = 0;
+        accelerationTime = 0.0;
+        begin = std::chrono::system_clock::now();
+    }
+    // std::cout << "acceleration time: " << accelerationTime << " stage: " << stage << std::endl;
     targetPosition = tempPosition + (currentPosition * direction);
 
-    positionData.push_back(targetPosition);
+    positionData.push_back(currentPosition);
+    velocityData.push_back(currentVelocity);
+    accelerationData.push_back(currentAcceleration);
     // std::cout << "targetPosition " << targetPosition << " counter: " << counter << std::endl;
 
+    previousTime = accelerationTime;
     return NULL;
 }
 
@@ -203,7 +199,7 @@ void MC_MoveAbsolute::mc_move_absolute(short unsigned int axis, bool Execute, bo
         }
         if (Execute && !Execute_previous)
         {
-            
+
             Busy = true;
             Done = false;
             tempPosition = 0;
@@ -215,6 +211,7 @@ void MC_MoveAbsolute::mc_move_absolute(short unsigned int axis, bool Execute, bo
             buffertime = 0.0;
             bufferDistance = 0.0;
             accelerationTime = 0.0;
+            remainedDistance = 0.0;
             deltaTime = 0.0;
             deltaAcceleration = 0.0;
             deltaVelocity = 0.0;
@@ -225,26 +222,62 @@ void MC_MoveAbsolute::mc_move_absolute(short unsigned int axis, bool Execute, bo
             DesiredVelocity = Velocity;
             stage = 10;
             t1 = (MaxAcceleration / Jerk);
-            t2 = (DesiredVelocity / MaxAcceleration) - t1;
-            t3 = (MaxAcceleration / Jerk);
-            // std::cout << "t1 : " << t1 << " t2 : " << t2 << " t3 : " << t3 << " counter: " << counter << std::endl;
+            t2 = (DesiredVelocity - (MaxAcceleration * t1)) / MaxAcceleration;
+            if (t2 < 0)
+            {
+                t2 = 0;
+            }
+            t3 = t1;
+
+            float t1_distance = (0.1667 * JerkLimit * t1 * t1 * t1);
+            float t2_distance = (0.5 * JerkLimit * t1 * t1 * t2) + (0.5 * MaxAcceleration * t2 * t2);
+            float t3_distance = (0.5 * JerkLimit * t1 * t1 * t3) + (MaxAcceleration * t2 * t3) + (0.5 * MaxAcceleration * t3 * t3) - (0.1667 * JerkLimit * t3 * t3 * t3);
+
+            if (desiredPosition < (2 * (t1_distance + t3_distance)))
+            {
+                t1 = std::cbrt(desiredPosition / (2 * JerkLimit));
+                t2 = 0;
+                t3 = t1;
+            }
+
+            else if (desiredPosition < (2 * (t1_distance + t2_distance + t3_distance)))
+            {
+                float x2 = (desiredPosition - (2 * (t1_distance + t3_distance))) * 0.5;
+                float t2_1;
+                float t2_2;
+                bool solved = solveQuadratic((0.5 * MaxAcceleration), (0.5 * JerkLimit * t1 * t1), -x2, t2_1, t2_2);
+                if (solved)
+                {
+                    t1 = t1;
+                    t2 = std::max(t2_1, t2_2);
+                    t3 = t1;
+                }
+                else
+                {
+                    std::cout << "No solution" << std::endl;
+                }
+            }
+
+            positionData.clear();     // ✅ Clear previous data
+            velocityData.clear();     // ✅ Clear previous data
+            accelerationData.clear(); // ✅ Clear previous data
+            accelerationTime = 0.0;
             previousTime = 0.0;
-            positionData.clear(); // ✅ Clear previous data
             begin = std::chrono::system_clock::now();
             periodicRunner.start(std::bind(&MC_MoveAbsolute::mc_move_absolute_exec, this), std::chrono::microseconds(350));
         }
 
-
         if (ContinuousUpdate && (!Execute && Execute_previous))
         {
-            stage = 49;
+            stage = 40;
             previousTime = 0.0;
             begin = std::chrono::system_clock::now();
         }
 
         if (!Busy)
+
         {
-            periodicRunner.stop();
+            std::cout << "Error: Axis is not busy" << std::endl;
         }
     }
     Execute_previous = Execute;
@@ -310,14 +343,13 @@ int main()
 
     motionController.Busy = true;
     std::cout << "Enter Target Position (or -1 to exit): ";
-    double targetPosition;
+    float targetPosition;
     std::cin >> targetPosition;
     while (motionController.Busy)
     {
         if (targetPosition == -1)
             break;
         motionController.mc_move_absolute(0, true, false, targetPosition, 100.0, 1000.0, 1000.0, 20000.0, 0, 0, true);
-        std::cout << "Moving to " << targetPosition << "...\n";
     }
 
     plotPositionData();

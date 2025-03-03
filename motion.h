@@ -14,6 +14,10 @@
 #include <vector> // Add this line
 #include <algorithm> // Needed for min_element & max_element
 
+    std::vector<double> positionData;
+    std::vector<double> velocityData;
+    std::vector<double> accelerationData;
+    
 class MC_MoveAbsolute
 {
 public:
@@ -27,6 +31,7 @@ public:
     uint16_t ErrorID;
     void mc_move_absolute(short unsigned int axis, bool Execute = false, bool ContinuousUpdate = false, float Position = 0.0, float Velocity = 0.0, float Acceleration = 0.0, float Deceleration = 0.0, float Jerk = 0.0, short unsigned int Direction = 0, short unsigned int BufferMode = 0, bool EN = true);
     void *mc_move_absolute_exec();
+
 
 private:
     PeriodicRunner periodicRunner;
